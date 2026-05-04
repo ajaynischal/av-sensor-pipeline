@@ -1,0 +1,5 @@
+/Users/ajay/Documents/Waymo/ThreadSafeSensorDataPipeline/av-sensor-pipeline/build/CMakeFiles/av-sensor-pipeline.dir
+/Users/ajay/Documents/Waymo/ThreadSafeSensorDataPipeline/av-sensor-pipeline/build/CMakeFiles/test_ring_buffer.dir
+/Users/ajay/Documents/Waymo/ThreadSafeSensorDataPipeline/av-sensor-pipeline/build/CMakeFiles/test_watchdog.dir
+/Users/ajay/Documents/Waymo/ThreadSafeSensorDataPipeline/av-sensor-pipeline/build/CMakeFiles/edit_cache.dir
+/Users/ajay/Documents/Waymo/ThreadSafeSensorDataPipeline/av-sensor-pipeline/build/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,1 @@
+/usr/bin/c++  -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names "CMakeFiles/av-sensor-pipeline.dir/src/main.cpp.o" "CMakeFiles/av-sensor-pipeline.dir/src/pipeline.cpp.o" "CMakeFiles/av-sensor-pipeline.dir/src/sensor_producer.cpp.o" "CMakeFiles/av-sensor-pipeline.dir/src/watchdog.cpp.o" -o av-sensor-pipeline

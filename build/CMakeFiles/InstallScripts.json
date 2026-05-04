@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/ajay/Documents/Waymo/ThreadSafeSensorDataPipeline/av-sensor-pipeline/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
