@@ -1,20 +1,36 @@
 # av-sensor-pipeline
 
-This project is a small multi-threaded simulation where synthetic lidar, camera, and radar producers publish `SensorMessage` frames into a lock-based ring buffer while a consumer drains and logs them, with a watchdog that detects silent producers.
+A multi-threaded C++17 sensor data pipeline simulating the ingestion layer
+of an autonomous vehicle software stack.
 
-## Why this matters for autonomous vehicle software
+## What it does
 
-Real AV stacks ingest high-rate sensor data under tight timing budgets; bounded queues, explicit concurrency control, and health monitoring prevent silent failures from starving downstream perception and planning. This demo mirrors those constraints at a portfolio-friendly scale.
+Three concurrent sensor producer threads (lidar at 10hz, camera at 30hz,
+radar at 20hz) push typed messages into a thread-safe ring buffer. A
+consumer thread reads and processes messages in real time, logging
+per-message latency. A watchdog timer monitors all producers and raises
+a fault alert within 500ms if any producer goes silent.
+
+## Why this is relevant to autonomous vehicle software
+
+On-vehicle AV software runs multiple sensor pipelines concurrently with
+strict latency and fault tolerance requirements. This project implements
+the core patterns used in that context: lock-based concurrent queuing,
+atomic heartbeat monitoring, RAII resource management, and structured
+fault detection with recovery callbacks. The architecture mirrors a
+real sensor ingestion layer where lidar, camera, and radar drivers feed
+a central processing pipeline.
 
 ## Architecture
+LidarProducer  (10hz)  
+CameraProducer (30hz)  +-->  RingBuffer<SensorMessage, 1024>  -->  Consumer
+RadarProducer  (20hz)  /| Watchdog (polls every 100ms, faults at 500ms)
 
-```
-LidarProducer  \
-CameraProducer  +-->  RingBuffer<SensorMessage,1024>  -->  Consumer
-RadarProducer  /                 |
-                          Watchdog
-                    (monitors all producers)
-```
+## Prerequisites
+
+CMake >= 3.16
+C++17 compiler (clang++ or g++)
+pthreads (standard on Linux and macOS)
 
 ## Build
 
@@ -28,35 +44,38 @@ cmake -B build && cmake --build build
 ./build/av-sensor-pipeline
 ```
 
-## Design decisions
+## Run tests
 
-- **Lock-based ring buffer with condition variables** — Gives predictable blocking semantics for the consumer (`pop` with timeout) while keeping `push` non-blocking so producers never deadlock when the queue is momentarily full.
-- **`std::atomic` heartbeats + watchdog thread** — Producer health is observed lock-free on the hot path; the watchdog batches checks on its own cadence, matching production patterns that isolate fault detection from data-plane throughput.
-- **RAII ownership (`unique_ptr` / `shared_ptr`) and ordered shutdown** — Every thread is joined, watchdog and producers stop in reverse launch order, and destructors guarantee cleanup without detached threads or manual `new`/`delete`.
+```bash
+./build/test_ring_buffer
+./build/test_watchdog
+```
 
 ## Sample output
-
-Normal steady-state lines look like:
-
-```
-[1735123456789012] [RADAR] id=radar-long seq=401 payload_size=64 latency_us=812
-[1735123456789456] [CAMERA] id=camera-center seq=902 payload_size=256 latency_us=633
-[1735123456790111] [LIDAR] id=lidar-front seq=103 payload_size=1024 latency_us=905
-[CONSUMER] buffer empty, waiting...
-```
-
-After the simulated lidar stall (`stop()` at five seconds), the watchdog raises a fault once the heartbeat age exceeds 500 ms:
-
-```
-[MAIN] Simulated fault: stopped lidar-front producer thread
-[WATCHDOG] FAULT: producer silent sensor_id=lidar-front
-```
-
-When the demo ends, the consumer prints aggregate counts per modality:
-
-```
+[1777871404290350] [CAMERA] id=camera-center seq=264 payload_size=256 latency_us=17
+[1777871404310151] [RADAR]  id=radar-long    seq=183 payload_size=64  latency_us=7
+[WATCHDOG] FAULT detected: lidar-front (no heartbeat for 500ms)
+[1777871404364621] [RADAR]  id=radar-long    seq=184 payload_size=64  latency_us=8
+...
 === Final statistics (messages processed) ===
-LIDAR:  42
-CAMERA: 287
-RADAR:  191
-```
+LIDAR:   49 msgs  |  avg latency:  12us  |  max latency:  45us
+CAMERA: 272 msgs  |  avg latency:   9us  |  max latency:  38us
+RADAR:  189 msgs  |  avg latency:  11us  |  max latency:  37us
+
+## Key design decisions
+
+- **RingBuffer uses a mutex and condition variable, not a spin lock.**
+  A spin lock wastes CPU cycles polling continuously. A condition variable
+  puts the consumer thread to sleep and wakes it only when data arrives,
+  which is correct behaviour for a pipeline where producers run at fixed
+  frequencies with idle gaps between messages.
+
+- **Heartbeat is std::atomic not a mutex-protected value.**
+  The watchdog reads last_heartbeat_us_ while the producer writes it
+  from a different thread. Making it atomic avoids a data race without
+  the overhead of locking, which matters in a high-frequency loop.
+
+- **All threads are joined in destructors, never detached.**
+  A detached thread that outlives its data causes undefined behaviour.
+  RAII join in each destructor guarantees every thread finishes before
+  the owning object is destroyed, making shutdown deterministic and safe.
